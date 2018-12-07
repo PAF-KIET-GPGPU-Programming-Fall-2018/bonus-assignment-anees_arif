@@ -1,0 +1,9 @@
+!wget "http://tamaraberg.com/faceDataset/originalPics.tar.gz"
+!mkdir DB
+!mkdir DB/Pos
+!tar xf ./originalPics.tar.gz -C ./DB/Pos
+
+!wget "https://github.com/JoakimSoderberg/haarcascade-negatives/archive/master.zip"
+!unzip master.zip
+!mkdir ./DB/Neg
+!cp ./haarcascade-negatives-master/images/* ./DB/Neg
