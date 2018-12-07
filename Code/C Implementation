@@ -1,0 +1,38 @@
+#include <stdio.h>
+
+
+
+
+
+
+
+// Compute Integral Image
+void integralImages( MyImage *src, MyIntImage *sum, MyIntImage *sqsum )
+{
+  int x, y, s, t;
+  unsigned char it;
+  
+  int height = src->height;
+  int width = src->width;
+  
+  unsigned char *data = src->data;
+  int * sumData = sum->data;
+  
+  for( y = 0; y < height; y++)
+    {
+    s = 0;
+    /* loop over the number of columns */
+    for( x = 0; x < width; x ++)
+	    {
+	      it = data[y*width+x];
+	      s += it; // Row wise sum
+
+	      t = s;
+	      if (y != 0)
+	          {
+	          t += sumData[(y-1)*width+x];  // Column wise sum
+	          }
+	  sumData[y*width+x]=t;
+	  }
+  }
+}
