@@ -1,0 +1,235 @@
+import numpy as np
+import cv2
+from os import listdir
+import time
+import os
+
+
+def integral_image(arr):
+    """ Returns integral image over last two axes. Assume first index is image index. """
+    return arr.cumsum(axis=-1).cumsum(axis=-2)
+
+
+
+def gen_type1(width, height, stride=1, increment=1):
+#     """ Type 1 filters must have an even height.
+#     Reference points:
+#         D   C
+#         E   B
+#         F   A
+#     Formula: A + C + 2E - 2B - D - F
+#     """
+    features = []
+    for w in range(1, width, 1 * increment):
+        for h in range(2, height, 2 * increment):
+            for x in range(0, 1 + (width - w) // stride, stride):
+                for y in range(0, 1 + (height - h) // stride, stride):
+                    A = (x + w - 1, y + h - 1)
+                    B = (x + w - 1, y + (h // 2) - 1)
+                    C = (x + w - 1, y - 1)
+                    D = (x - 1, y - 1)
+                    E = (x - 1, y + (h // 2) - 1)
+                    F = (x - 1, y + h - 1)
+
+                    add = [i for i in [A, C, E, E] if i[0] >= 0 and i[1] >= 0]
+                    sub = [i for i in [B, B, D, F] if i[0] >= 0 and i[1] >= 0]
+                    features.append((tuple(add), tuple(sub)))
+    return features
+
+
+
+def gen_type2(width, height, stride=1, increment=1):
+#     """ Type 2 filters must have even width.
+#     Reference points:
+#         D   E   F
+#         C   B   A
+
+#     Formula: A + C + 2E - 2B - D - F
+#     """
+    features = []
+    for w in range(2, width, 2 * increment):
+        for h in range(1, height, 1 * increment):
+            for x in range(0, 1 + (width - w) // stride, stride):
+                for y in range(0, 1 + (height - h) // stride, stride):
+                    A = (x + w - 1, y + h - 1)
+                    B = (x + (w // 2) - 1, y + h - 1)
+                    C = (x - 1, y + h - 1)
+                    D = (x - 1, y - 1)
+                    E = (x + (w // 2) - 1, y - 1)
+                    F = (x + w - 1, y - 1)
+
+                    add = [i for i in [A, C, E, E] if i[0] >= 0 and i[1] >= 0]
+                    sub = [i for i in [B, B, D, F] if i[0] >= 0 and i[1] >= 0]
+                    features.append((tuple(add), tuple(sub), 1, 0))
+
+    return features
+
+
+def gen_type3(width, height, stride=1, increment=1):
+#     """ Type 3 filters must have even width and even height.
+#     Reference points:
+#         I   H   G
+#         F   E   D
+#         C   B   A
+
+#     Formula: A + C + 4E + G + I - 2B - 2D - 2F - 2H
+#     """
+    features = []
+    for w in range(2, width, 2 * increment):
+        for h in range(2, height, 2 * increment):
+            for x in range(0, 1 + (width - w) // stride, stride):
+                for y in range(0, 1 + (height - h) // stride, stride):
+                    A = (x + w - 1, y + h - 1)
+                    B = (x + (w // 2) - 1, y + h - 1)
+                    C = (x - 1, y + h - 1)
+                    D = (x + w - 1, y + (h // 2) - 1)
+                    E = (x + (w // 2) - 1, y + (h // 2) - 1)
+                    F = (x - 1, y + (h // 2) - 1)
+                    G = (x + w - 1, y - 1)
+                    H = (x + (w // 2) - 1, y - 1)
+                    I = (x - 1, y - 1)
+
+                    add = [i for i in [A, C, E, E, E, E, G, I] if i[0] >= 0 and i[1] >= 0]
+                    sub = [i for i in [B, B, D, D, F, F, H, H] if i[0] >= 0 and i[1] >= 0]
+                    features.append((tuple(add), tuple(sub)))
+
+    return features
+
+
+def gen_type4(width, height, stride=1, increment=1):
+#     """ Type 4 filters must have a width that is a multiple of 3.
+#     Reference points:
+#         E   F   G   H
+#         D   C   B   A
+
+#     Formula: A + 2C + E + 2G - 2B - D - 2F - H
+#     """
+    features = []
+    for w in range(3, width, 3 * increment):
+        for h in range(1, height, 1 * increment):
+            for x in range(0, 1 + (width - w) // stride, stride):
+                for y in range(0, 1 + (height - h) // stride, stride):
+                    A = (x + w - 1, y + h - 1)
+                    B = (x + 2 * (w // 3) - 1, y + h - 1)
+                    C = (x + (w // 3) - 1, y + h - 1)
+                    D = (x - 1, y + h - 1)
+                    E = (x - 1, y - 1)
+                    F = (x + (w // 3) - 1, y - 1)
+                    G = (x + 2 * (w // 3) - 1, y - 1)
+                    H = (x + w - 1, y - 1)
+
+                    add = [i for i in [A, C, C, E, G, G] if i[0] >= 0 and i[1] >= 0]
+                    sub = [i for i in [B, B, D, F, F, H] if i[0] >= 0 and i[1] >= 0]
+                    features.append((tuple(add), tuple(sub)))
+
+    return features  
+  
+  
+
+def eval_feature(feature, data):
+    add, sub = feature[0], feature[1]
+#     print(add,sub)
+    for xx in add:
+      try:
+        b = xx[1]
+      except:
+        pass
+        
+      try:
+        a = xx[0]
+      except:
+        pass
+      to_add=data[a,b]
+   
+    for yy in sub:
+      try:
+        b = yy[1]
+      except:
+        pass
+        
+      try:
+        a = yy[0]
+      except:
+        pass
+      to_sub=data[a,b]
+#     bb=[y[1] for y in add]
+#     print(bb)
+    
+#     print(bb[1])
+    
+#     to_add = data[:, [a], [b]].sum(axis=-1)
+#     to_sub = data[:, [x[0] for x in sub], [y[1] for y in sub]].sum(axis=-1)
+    val = to_add - to_sub
+    return val
+  
+  
+  
+# start = time.time()
+db=[]
+pos=[]
+for path, subdirs, files in os.walk("./DB/Pos/"):
+    for ind,name in enumerate(files):
+      if name.endswith('.jpg'):
+        if len(db)<5000:
+          pos.append(cv2.imread(os.path.join(path, name),0))        
+          db.append(cv2.imread(os.path.join(path, name),0))
+
+print("Total Positive Samples Loaded : "+str(len(pos)))
+
+neg=[]
+for path, subdirs, files in os.walk("./DB/Neg/"):
+    for name in files:
+      if name.endswith('.jpg'):
+        neg.append(cv2.imread(os.path.join(path, name),0))
+        db.append(cv2.imread(os.path.join(path, name),0))
+print("Total Negative Samples Loaded : "+str(len(neg)))
+print("Total Database Samples Loaded : "+str(len(db)))
+
+del pos,neg
+# int_img=[]
+# int_img=np.array()
+
+# for ind,im in enumerate(db):
+#   int_img=np.array(int_img,integral_image(im))
+  
+# print(ind)
+# db=db[:8000]
+int_img = np.array([integral_image(im) for im in db])
+int_img/=int_img.shape[0]
+img_dist = np.full(int_img.shape[0],1/int_img.shape[0])
+# print(img_dist)
+img_dist /= img_dist.sum()
+# print(img_dist)
+
+
+feat_vertcs1=gen_type1(24,24,1,1)
+feat_vertcs2=gen_type2(24,24,1,1)
+feat_vertcs3=gen_type3(24,24,1,1)
+feat_vertcs4=gen_type4(24,24,1,1)
+
+del db
+print(int_img.shape)
+comp_ftr=[]
+for i_img in int_img:
+  ftr=[]
+  for ind,feat_vert in enumerate(feat_vertcs1):
+    ftr.append(eval_feature(feat_vert,i_img))
+
+  for ind,feat_vert in enumerate(feat_vertcs2):
+    ftr.append(eval_feature(feat_vert,i_img))
+
+  for ind,feat_vert in enumerate(feat_vertcs3):
+    ftr.append(eval_feature(feat_vert,i_img))
+
+  for ind,feat_vert in enumerate(feat_vertcs3):
+    ftr.append(eval_feature(feat_vert,i_img))
+  
+  comp_ftr.append(ftr)
+  del ftr
+# stop = time.time()
+# print(stop-start)
+
+print(len(comp_ftr))
+
+# a=np.array([[3, 4, 5],[5,6,4]])
+
